@@ -1,0 +1,37 @@
+# Python 3.12 (see .python-version). Tested with the versions noted in README.md.
+#
+# Windows + NVIDIA GPU: install the CUDA build of PyTorch FIRST (see README), then this file.
+# Without it, `pip install openai-whisper` installs a CPU-only PyTorch on Windows.
+
+# --- Web API ---
+fastapi>=0.115,<1
+uvicorn[standard]>=0.30,<1
+python-multipart>=0.0.9      # file uploads
+python-dotenv>=1.0,<2
+pydantic>=2.7,<3
+
+# --- LLM (local, through Ollama) ---
+langchain-core>=1.0,<2
+langchain-ollama>=1.0,<2
+langchain-text-splitters>=1.0,<2
+
+# --- Transcription (local Whisper; pulls in PyTorch) ---
+openai-whisper==20250625
+sarvamai
+
+# --- RAG vector store (embeddings are built into chromadb, ONNX, CPU) ---
+chromadb>=1.0,<2
+
+# --- Tests ---
+pytest>=8
+httpx>=0.27                  # used by FastAPI's TestClient
+
+
+fastapi
+uvicorn[standard]
+python-multipart
+python-dotenv
+pydantic
+langchain-core
+langchain-ollama
+langchain-community
