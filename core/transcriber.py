@@ -10,6 +10,13 @@ from dotenv import load_dotenv
 
 from core import PipelineError
 
+LANGUAGES = {
+    "english": "English",
+    "hindi": "Hindi",
+    "hinglish": "Hinglish",
+    "auto": "Auto Detect",
+}
+
 load_dotenv()
 
 # Saaras v2.5 automatically detects the spoken language
