@@ -2,8 +2,11 @@
 
 from __future__ import annotations
 
+import gc
 import os
 import threading
+import tempfile
+import subprocess
 from pathlib import Path
 
 from dotenv import load_dotenv
@@ -13,7 +16,6 @@ from core import PipelineError
 load_dotenv()
 
 # UI/CLI language name -> Whisper language code.
-# None means automatic language detection.
 LANGUAGES = {
     "english": "en",
     "hindi": "hi",
@@ -28,7 +30,8 @@ SARVAM_MODEL = os.getenv("SARVAM_MODEL", "saaras:v4")
 
 
 def whisper_model_name() -> str:
-    return os.getenv("WHISPER_MODEL", "small")
+    # tiny is significantly lighter than small on limited-memory hosts.
+    return os.getenv("WHISPER_MODEL", "tiny")
 
 
 def get_model():
@@ -44,43 +47,46 @@ def get_model():
                     "Whisper isn't installed. Run: pip install -r requirements.txt"
                 ) from exc
 
-            device = os.getenv("WHISPER_DEVICE") or None
-
             try:
                 _model = whisper.load_model(
                     whisper_model_name(),
-                    device=device,
+                    device="cpu",
                 )
             except Exception as exc:
                 raise PipelineError(
                     f"Could not load the Whisper model "
-                    f"'{whisper_model_name()}'. The first run downloads "
-                    "it, so check your internet connection."
+                    f"'{whisper_model_name()}'. Check available memory."
                 ) from exc
 
     return _model
 
 
-def _transcribe_with_whisper(
-    audio_path: Path,
-    language: str,
-) -> str:
-    """Transcribe using local Whisper."""
+def _transcribe_with_whisper(audio_path: Path, language: str) -> str:
+    """Transcribe using local Whisper with reduced memory usage."""
+    import torch
+
     model = get_model()
 
     try:
-        result = model.transcribe(
-            str(audio_path),
-            language=LANGUAGES[language],
-            task="transcribe",
-            fp16=getattr(model.device, "type", "cpu") == "cuda",
-        )
-    except Exception as exc:
-        raise PipelineError(
-            "Whisper transcription failed. The audio may be corrupt or unreadable."
-        ) from exc
+        with torch.inference_mode():
+            result = model.transcribe(
+                str(audio_path),
+                language=LANGUAGES[language],
+                task="transcribe",
+                fp16=False,
+                verbose=False,
+            )
 
-    text = " ".join((result.get("text") or "").split())
+        text = " ".join((result.get("text") or "").split())
+        del result
+        gc.collect()
+
+    except Exception as exc:
+        gc.collect()
+        raise PipelineError(
+            "Whisper transcription failed. The audio may be corrupt, "
+            "unreadable, or too large for the available memory."
+        ) from exc
 
     if not text:
         raise PipelineError("No speech was detected in this file.")
@@ -95,7 +101,7 @@ def _transcribe_with_sarvam(audio_path: Path) -> str:
     if not api_key:
         raise PipelineError(
             "Hinglish transcription requires SARVAM_API_KEY. "
-            "Add your Sarvam API key to the backend .env file."
+            "Add your Sarvam API key to the backend environment."
         )
 
     if not audio_path.is_file():
@@ -109,13 +115,8 @@ def _transcribe_with_sarvam(audio_path: Path) -> str:
         ) from exc
 
     try:
-        import subprocess
-        import tempfile
-
         client = SarvamAI(api_subscription_key=api_key)
         transcripts = []
-
-        # Keep each synchronous request below the short-audio limit.
         chunk_seconds = 25
 
         with tempfile.TemporaryDirectory(prefix="sarvam_transcription_") as temp_dir:
@@ -170,12 +171,14 @@ def _transcribe_with_sarvam(audio_path: Path) -> str:
                     if transcript:
                         transcripts.append(transcript)
 
+                    del response
+                    gc.collect()
+
                 except Exception as exc:
                     raise PipelineError(
-                        f"Sarvam transcription failed on audio "
-                        f"chunk {index} of {len(chunks)}. "
-                        "Check your API key, account access, "
-                        "internet connection and audio format."
+                        f"Sarvam transcription failed on audio chunk "
+                        f"{index} of {len(chunks)}. Check your API key, "
+                        "account access, internet connection, and audio format."
                     ) from exc
 
         text = " ".join(transcripts).strip()
@@ -203,15 +206,7 @@ def transcribe_audio(
     audio_path: Path,
     language: str = "english",
 ) -> str:
-    """
-    Transcribe audio with local Whisper or Sarvam.
-
-    Supported language choices:
-      - english: local Whisper, English
-      - hindi: local Whisper, Hindi
-      - auto: local Whisper, automatic detection
-      - hinglish: Sarvam code-mixed transcription
-    """
+    """Transcribe audio using local Whisper or Sarvam."""
     key = (language or "english").strip().lower()
 
     if key not in LANGUAGES:
