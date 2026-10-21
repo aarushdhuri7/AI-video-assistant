@@ -16,7 +16,6 @@ langchain-ollama>=1.0,<2
 langchain-text-splitters>=1.0,<2
 
 # --- Transcription (local Whisper; pulls in PyTorch) ---
-openai-whisper==20250625
 sarvamai
 
 # --- RAG vector store (embeddings are built into chromadb, ONNX, CPU) ---
