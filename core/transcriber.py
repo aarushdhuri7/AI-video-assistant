@@ -7,8 +7,9 @@ import tempfile
 from pathlib import Path
 
 from dotenv import load_dotenv
-
 from core import PipelineError
+
+load_dotenv()
 
 LANGUAGES = {
     "english": "English",
@@ -17,10 +18,6 @@ LANGUAGES = {
     "auto": "Auto Detect",
 }
 
-load_dotenv()
-
-# Saaras v2.5 automatically detects the spoken language
-# and translates speech into English.
 SARVAM_MODEL = os.getenv("SARVAM_MODEL", "saaras:v2.5")
 
 
@@ -44,8 +41,6 @@ def _transcribe_with_sarvam(audio_path: Path, language: str) -> str:
     try:
         client = SarvamAI(api_subscription_key=api_key)
         transcripts = []
-
-        # Sarvam's synchronous endpoint accepts audio up to 30 seconds.
         chunk_seconds = 25
 
         with tempfile.TemporaryDirectory(prefix="sarvam_transcription_") as temp_dir:
@@ -107,7 +102,6 @@ def _transcribe_with_sarvam(audio_path: Path, language: str) -> str:
                     gc.collect()
 
                 except Exception as exc:
-                    # Include the API error, but never expose the API key.
                     raise PipelineError(
                         f"Sarvam failed on audio chunk {index} "
                         f"of {len(chunks)}. API error: {exc}"
@@ -148,9 +142,8 @@ def transcribe_audio(
     """
     Transcribe audio using Sarvam Saaras v2.5.
 
-    Saaras v2.5 automatically detects the input language and
-    returns English translation. The language argument is retained
-    for compatibility with the existing application.
+    Saaras v2.5 automatically detects the spoken language
+    and returns an English translation.
     """
 
     supported_languages = {"english", "hindi", "auto", "hinglish"}
