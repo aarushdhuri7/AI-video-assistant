@@ -94,13 +94,9 @@ def _transcribe_with_sarvam(
             for index, chunk_path in enumerate(chunks, start=1):
                 try:
                     with chunk_path.open("rb") as audio_file:
-                        response = client.speech_to_text.transcribe(
+                        response = client.speech_to_text.translate(
                             file=audio_file,
-                            model=SARVAM_MODEL,
-                            language_code=LANGUAGES[language],
-                            mode=(
-                                "codemix" if language == "hinglish" else "transcribe"
-                            ),
+                            model="saaras:v2.5",
                         )
 
                     transcript = (getattr(response, "transcript", "") or "").strip()
